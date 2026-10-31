@@ -12,6 +12,6 @@
     <NumberOfParentCategoriesToRollUp>2</NumberOfParentCategoriesToRollUp>
   </TemplateData>
   <TemplateContent>
-    <ProjectItem SubType="Designer" ItemType="None" TargetFileName="$fileinputname$.xaml" ReplaceParameters="true" OpenInEditor="true">Workflow.xaml</ProjectItem>
+    <ProjectItem SubType="Designer" ItemType="None" CustomTool="" TargetFileName="$fileinputname$.xaml" ReplaceParameters="true" OpenInEditor="true">Workflow.xaml</ProjectItem>
   </TemplateContent>
 </VSTemplate>

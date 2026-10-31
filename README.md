@@ -6,6 +6,14 @@ Windows Workflow Foundation designer** and **standard Toolbox**.
 The designer runs on .NET Framework. Workflow execution stays in your
 application's modern .NET runtime.
 
+[**Download the installer**](https://github.com/ema2ooo/CoreWF-VisualStudio-Patch/releases/latest/download/CoreWF-WorkflowDesigner-Setup.exe)
+· [Release notes](https://github.com/ema2ooo/CoreWF-VisualStudio-Patch/releases/latest)
+· [SHA-256 checksums](https://github.com/ema2ooo/CoreWF-VisualStudio-Patch/releases/latest/download/SHA256SUMS.txt)
+
+The installer is distributed through **Releases**. This repository contains
+source, build scripts, tests, and templates; generated binaries and local
+Visual Studio backups are excluded.
+
 ## Features
 
 - Open workflow XAML in the original Visual Studio designer and document tabs.
@@ -58,6 +66,14 @@ Use **Browse** for an installation outside the list.
 After adding or changing a custom activity, build the project again to refresh
 its design-time metadata and Toolbox entry. The setup executable is unsigned.
 
+To verify a download, compare its hash with `SHA256SUMS.txt` from the same release:
+
+```powershell
+Get-FileHash .\CoreWF-WorkflowDesigner-Setup.exe -Algorithm SHA256
+```
+
+## Add workflows
+
 For new workflow files, choose **Activity (CoreWF)**, **Flowchart Workflow
 (CoreWF)**, or **State Machine Workflow (CoreWF)** in **Add New Item**. The
 Workflow category and the **CoreWF** search display these items in compatible
@@ -65,6 +81,11 @@ C# projects. The original **Activity**, **Activity Designer**, **Code Activity**
 and **WCF Workflow Service** templates are filtered out of modern projects;
 their reference wizard and XAML compiler require .NET Framework. Framework
 projects retain those original templates and do not display the CoreWF items.
+
+| Project target | Available workflow item templates |
+| --- | --- |
+| Modern .NET / .NET Standard, C# | Activity (CoreWF), Flowchart Workflow (CoreWF), State Machine Workflow (CoreWF) |
+| .NET Framework | Original Framework workflow templates |
 
 Setup updates the installed workflow template catalog and the selected Visual
 Studio instance's managed design-time targets locally. Runtime capabilities
@@ -76,8 +97,9 @@ the designer components.
 
 CoreWF workflow XAML is loaded by the application's workflow runtime. These
 templates use build action **None** and the standard designer; they do not
-generate an `Activity1` C# class during the build. Add a compatible workflow
-runtime package to your application when you want to execute the workflow.
+generate an `Activity1` C# class during the build. They explicitly clear the
+legacy XAML custom tool. Add a compatible workflow runtime package to your
+application when you want to execute the workflow.
 
 ## Repair and uninstall
 
@@ -143,6 +165,19 @@ instruction padding to exercise structural matching.
 Template checks also cover migration from earlier receipt-based installers,
 rollback after catalog/capability changes, and actual Visual Studio MSBuild
 evaluation for Core, Standard, Framework, and unknown runtime identifiers.
+
+The **Add New Item** dialog was also checked in Visual Studio 2022:
+
+| C# project target | Workflow templates shown |
+| --- | --- |
+| .NET 9 | Three CoreWF templates |
+| .NET Standard 2.1 | Three CoreWF templates |
+| .NET Framework 4.7.2, classic project | Original Framework templates |
+| .NET Framework 4.8, SDK-style project | Original Framework templates |
+
+CoreWF search results are absent in both Framework project formats. Creating a
+CoreWF activity opens the built-in graphical designer with the standard Toolbox.
+The four-project verification solution builds successfully.
 
 Framework callback checks invoke the generated Visual Studio DLL with .NET 8,
 .NET 10, .NET Standard, and .NET Framework targets, then pass the result to the
