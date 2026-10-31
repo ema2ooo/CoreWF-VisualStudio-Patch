@@ -14,6 +14,34 @@ New-Item -ItemType Directory -Path $fixture -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $fixture '.corewf-test-fixture') -Value 'isolated-local-patch-test'
 $receiptPath = Join-Path $VisualStudioIdePath 'CoreWF.BuiltinPatchBackup\local-install-plan.json'
 $installedPlan = if (Test-Path -LiteralPath $receiptPath) { Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json } else { $null }
+function Copy-TemplateInputs([string]$FixtureIde) {
+    $ideRoot = [IO.Path]::GetFullPath((Join-Path $VisualStudioIdePath '..\..'))
+    $fixtureInstallation = [IO.Path]::GetFullPath((Join-Path $FixtureIde '..\..'))
+    $catalogs = @(Get-ChildItem -LiteralPath (Join-Path $VisualStudioIdePath 'ItemTemplates') -Filter 'Microsoft.VisualStudio.WorkflowV2.Resources.*.Item..vstman' -File)
+    $relatives = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    [void]$relatives.Add('Installation/MSBuild/Microsoft/VisualStudio/Managed/Microsoft.Managed.DesignTime.targets')
+    foreach ($catalog in $catalogs) {
+        $relative = 'ItemTemplates/' + $catalog.Name
+        [void]$relatives.Add($relative)
+        $previous = @($installedPlan.Files | Where-Object Target -eq $relative)
+        $source = if ($previous.Count -eq 1) { Join-Path $VisualStudioIdePath $previous[0].Backup } else { $catalog.FullName }
+        [xml]$xml = Get-Content -LiteralPath $source -Raw
+        foreach ($container in $xml.VSTemplateManifest.VSTemplateContainer) {
+            [void]$relatives.Add('ItemTemplates/' + $container.RelativePathOnDisk.Replace('\','/') + '/' + $container.TemplateFileName)
+        }
+    }
+    foreach ($relative in $relatives) {
+        $previous = @($installedPlan.Files | Where-Object Target -eq $relative)
+        $source = if ($previous.Count -eq 1) { Join-Path $VisualStudioIdePath $previous[0].Backup }
+                  elseif ($relative.StartsWith('Installation/')) { Join-Path $ideRoot $relative.Substring(13) }
+                  else { Join-Path $VisualStudioIdePath $relative }
+        if ($previous.Count -eq 1 -and (Get-FileHash -LiteralPath $source).Hash -ne $previous[0].OriginalSha256) { throw 'Template backup hash mismatch.' }
+        $target = if ($relative.StartsWith('Installation/')) { Join-Path $fixtureInstallation $relative.Substring(13) } else { Join-Path $FixtureIde $relative }
+        New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $target
+    }
+}
+Copy-TemplateInputs $fixture
 foreach ($relative in @('Microsoft.VisualStudio.Activities.dll','HostSideAdapters\Microsoft.VisualStudio.Activities.HostAdapter.dll','AddinSideAdapters\Microsoft.VisualStudio.Activities.AddinAdapter.dll','Addins\WorkflowDesigner\Microsoft.VisualStudio.Activities.Addin.dll')) {
     if ($installedPlan) {
         $entry = @($installedPlan.Files | Where-Object { $_.Target.Replace('/','\') -eq $relative -and $_.Original })
@@ -60,6 +88,7 @@ foreach ($profile in $profiles.Plans) {
     $matches = @($profile.Files | Where-Object { $target=Join-Path $VisualStudioIdePath $_.Target; -not (Test-Path -LiteralPath $target) -or (Get-FileHash -LiteralPath $target).Hash -ne $_.Sha256 }).Count -eq 0
     if (-not $matches) { continue }
     $legacyFixture = Join-Path $fixtureRoot 'Legacy\Common7\IDE'
+    Copy-TemplateInputs $legacyFixture
     foreach ($file in $profile.Files) {
         $destination = Join-Path $legacyFixture $file.Target
         New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($destination)) -Force | Out-Null
@@ -86,6 +115,18 @@ if ($setupTest.ExitCode -ne 0) {
     Get-Content -LiteralPath (Join-Path $fixtureRoot 'stderr.log')
     throw ('Local-patching installer fixture failed. See ' + $fixtureRoot)
 }
+$evaluation = Join-Path $fixtureRoot 'RuntimeCapabilities.proj'
+$import = Join-Path $fixture 'test-generated/Installation/MSBuild/Microsoft/VisualStudio/Managed/Microsoft.Managed.DesignTime.targets'
+$escapedImport = [Security.SecurityElement]::Escape($import)
+Set-Content -LiteralPath $evaluation -Value ('<Project><Import Project="' + $escapedImport + '" /></Project>')
+$msbuild = [IO.Path]::GetFullPath((Join-Path $VisualStudioIdePath '../../MSBuild/Current/Bin/amd64/MSBuild.exe'))
+foreach ($case in @(@('.NETCoreApp','CoreWFModernRuntime'), @('.NETStandard','CoreWFModernRuntime'), @('.NETFramework','CoreWFFrameworkRuntime'), @('UnknownRuntime',''))) {
+    $result = & $msbuild $evaluation -nologo -getItem:ProjectCapability ('-p:TargetFrameworkIdentifier=' + $case[0]) -p:LangName=en-US -p:_TargetFrameworkVersionWithoutV=9.0 | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) { throw 'Design-time capability evaluation failed.' }
+    $actual = @($result.Items.ProjectCapability | Where-Object Identity -like 'CoreWF*' | ForEach-Object Identity)
+    if (($actual -join ',') -ne $case[1]) { throw ('Wrong runtime capability for ' + $case[0]) }
+}
+Write-Output 'PASS: actual VS MSBuild evaluation separates Core/Standard, Framework, and unknown runtimes.'
 & (Join-Path $PSScriptRoot 'tools\BinaryPatch\Test-StandardDesigner.ps1') -VisualStudioIdePath $VisualStudioIdePath -WorkflowPath (Join-Path $PSScriptRoot 'samples\Minimal.xaml') -CompatibilityAssemblyPath (Join-Path $fixture 'test-generated\CoreWF.LegacyAdapters.dll')
 $probe = Join-Path $PSScriptRoot 'src\BuiltinDesigner.LegacyProbe\bin\Release\net48\BuiltinDesigner.LegacyProbe.exe'
 $previousIde = $env:COREWF_PROBE_IDE

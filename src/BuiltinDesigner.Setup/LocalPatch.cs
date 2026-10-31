@@ -6,6 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
+using System.Text.RegularExpressions;
+using System.Xml;
 
 namespace BuiltinDesigner.Setup
 {
@@ -43,6 +45,48 @@ namespace BuiltinDesigner.Setup
     {
         internal const string Receipt = "CoreWF.BuiltinPatchBackup/local-install-plan.json";
         internal const string Consent = "--consent-local-patch";
+        internal const string ManagedTargets = "Installation/MSBuild/Microsoft/VisualStudio/Managed/Microsoft.Managed.DesignTime.targets";
+
+        // The only target outside Common7/IDE is this selected instance's managed
+        // design-time targets. Never resolve arbitrary receipt paths against VS root.
+        internal static string TargetPath(string ide, string target)
+        {
+            if (target == ManagedTargets)
+                return PatchEngine.Contained(Path.GetFullPath(Path.Combine(ide, "..", "..")), target.Substring("Installation/".Length));
+            return PatchEngine.Contained(ide, target);
+        }
+
+        internal static bool IsTemplateOriginal(string target)
+        {
+            return target == ManagedTargets || Regex.IsMatch(target,
+                @"^ItemTemplates/Microsoft\.VisualStudio\.WorkflowV2\.Resources\.[a-zA-Z0-9-]+\.Item\.\.vstman$") || Regex.IsMatch(target,
+                @"^ItemTemplates/(CSharp|VisualBasic)/Workflow/[0-9]+/(Activity|ActivityDesigner|CodeActivity|WCFWorkflowService|VBWCFWorkflowService)/[a-zA-Z0-9]+\.vstemplate$");
+        }
+
+        internal static string[] OriginalTargets(string ide)
+        {
+            var targets = new HashSet<string>(Program.Package.Originals.Select(file => file.Target), StringComparer.OrdinalIgnoreCase) { ManagedTargets };
+            string directory = Path.Combine(ide, "ItemTemplates");
+            foreach (string catalog in Directory.GetFiles(directory, "Microsoft.VisualStudio.WorkflowV2.Resources.*.Item..vstman"))
+            {
+                string relative = "ItemTemplates/" + Path.GetFileName(catalog);
+                if (!IsTemplateOriginal(relative)) throw new InvalidDataException("Unexpected workflow catalog path.");
+                targets.Add(relative);
+                var document = new XmlDocument { XmlResolver = null };
+                document.Load(catalog);
+                var namespaces = new XmlNamespaceManager(document.NameTable);
+                namespaces.AddNamespace("m", "http://schemas.microsoft.com/developer/vstemplatemanifest/2015");
+                foreach (XmlNode container in document.SelectNodes("/m:VSTemplateManifest/m:VSTemplateContainer", namespaces))
+                {
+                    string path = "ItemTemplates/" + container["RelativePathOnDisk"].InnerText.Replace('\\', '/') + "/" + container["TemplateFileName"].InnerText;
+                    if (AllowedTargets().Contains(path) && path.StartsWith("ItemTemplates/CSharp/Workflow/1033/CoreWF", StringComparison.Ordinal)) continue;
+                    if (!IsTemplateOriginal(path)) throw new InvalidDataException("Unexpected workflow template path: " + path);
+                    targets.Add(path);
+                }
+            }
+            if (!targets.Any(path => path.EndsWith(".vstman"))) throw new InvalidDataException("The installed workflow item catalog is missing.");
+            return targets.OrderBy(path => path, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
 
         internal static T Read<T>(string path)
         {
@@ -111,8 +155,8 @@ namespace BuiltinDesigner.Setup
                 PatchEngine.Contained(Program.Payload, file.Payload);
                 if (!seen.Add(file.Target) || !IsHash(file.Sha256))
                     throw new InvalidDataException("Invalid or duplicate installation target.");
-                OriginalFile original = Program.Package.Originals.SingleOrDefault(item => string.Equals(item.Target, file.Target, StringComparison.OrdinalIgnoreCase));
-                if (original != null)
+                bool original = Program.Package.Originals.Any(item => string.Equals(item.Target, file.Target, StringComparison.OrdinalIgnoreCase)) || IsTemplateOriginal(file.Target);
+                if (original)
                 {
                     if (string.IsNullOrEmpty(file.Original) || !IsHash(file.OriginalSha256))
                         throw new InvalidDataException("Unexpected original designer identity.");
@@ -131,7 +175,10 @@ namespace BuiltinDesigner.Setup
                 }
             }
             var allowed = AllowedTargets();
-            if (!fromPackage && plan.Files.Length == allowed.Count - 2)
+            foreach (Entry file in plan.Files.Where(file => IsTemplateOriginal(file.Target))) allowed.Add(file.Target);
+            if (fromPackage && (!seen.Contains(ManagedTargets) || !seen.Any(path => IsTemplateOriginal(path) && path.EndsWith(".vstman"))))
+                throw new InvalidDataException("Workflow runtime filtering metadata is missing.");
+            if (!fromPackage && !seen.Contains("CoreWF.DesignerPatch.LICENSE.txt") && !seen.Contains("CoreWF.DesignerPatch.NOTICES.md"))
             {
                 allowed.Remove("CoreWF.DesignerPatch.LICENSE.txt");
                 allowed.Remove("CoreWF.DesignerPatch.NOTICES.md");
@@ -182,27 +229,28 @@ namespace BuiltinDesigner.Setup
                 if (!File.Exists(Path.Combine(ide, "devenv.exe"))) throw new FileNotFoundException("Select a Visual Studio Common7\\IDE folder containing devenv.exe.");
             }
             Plan prior = LoadReceipt(ide, false);
-            foreach (OriginalFile original in Program.Package.Originals)
+            foreach (string original in OriginalTargets(ide))
             {
-                string target = PatchEngine.Contained(ide, original.Target);
+                string target = TargetPath(ide, original);
                 string current = PatchEngine.Hash(target);
-                Entry previous = prior == null ? null : prior.Files.Single(file => file.Target == original.Target);
+                Entry previous = prior == null ? null : prior.Files.SingleOrDefault(file => file.Target == original);
                 if (previous != null)
                 {
                     if (current != previous.Sha256 && current != previous.OriginalSha256)
-                        throw new InvalidOperationException("The installed designer changed since patching. No older files will be restored over a Visual Studio update: " + original.Target);
+                        throw new InvalidOperationException("The installed designer changed since patching. No older files will be restored over a Visual Studio update: " + original);
                     PatchEngine.Verify(BackupPath(ide, previous), previous.OriginalSha256);
                 }
                 else
                 {
+                    if (IsTemplateOriginal(original)) continue; // XML layout is validated during local preparation.
                     using (var module = Mono.Cecil.ModuleDefinition.ReadModule(target))
                     {
                         var identity = module.Assembly.Name;
                         if (!string.Equals(identity.Name, Path.GetFileNameWithoutExtension(target), StringComparison.OrdinalIgnoreCase) ||
                             BitConverter.ToString(identity.PublicKeyToken).Replace("-", "") != "31BF3856AD364E35")
-                            throw new InvalidDataException("Unexpected Workflow Designer assembly identity: " + original.Target);
+                            throw new InvalidDataException("Unexpected Workflow Designer assembly identity: " + original);
                         if (module.AssemblyReferences.Any(name => name.Name == "CoreWF.LegacyAdapters"))
-                            throw new InvalidOperationException("An unrecognized older CoreWF patch is installed. Preserve its original backups and uninstall it with its original installer: " + original.Target);
+                            throw new InvalidOperationException("An unrecognized older CoreWF patch is installed. Preserve its original backups and uninstall it with its original installer: " + original);
                     }
                 }
             }
@@ -262,11 +310,11 @@ namespace BuiltinDesigner.Setup
             Plan prior = LoadReceipt(ide, false);
             string inputs = output + "-inputs";
             Directory.CreateDirectory(inputs);
-            foreach (OriginalFile original in Program.Package.Originals)
+            foreach (string original in OriginalTargets(ide))
             {
-                Entry previous = prior == null ? null : prior.Files.Single(file => file.Target == original.Target);
-                string source = previous == null ? PatchEngine.Contained(ide, original.Target) : BackupPath(ide, previous);
-                string destination = PatchEngine.Contained(inputs, original.Target);
+                Entry previous = prior == null ? null : prior.Files.SingleOrDefault(file => file.Target == original);
+                string source = previous == null ? TargetPath(ide, original) : BackupPath(ide, previous);
+                string destination = PatchEngine.Contained(inputs, original);
                 Directory.CreateDirectory(Path.GetDirectoryName(destination));
                 File.Copy(source, destination);
             }
@@ -291,6 +339,8 @@ namespace BuiltinDesigner.Setup
             }
             Plan plan = Read<Plan>(Path.Combine(output, "install-plan.json"));
             ValidatePlan(plan, true);
+            if (!new HashSet<string>(plan.Files.Where(file => !string.IsNullOrEmpty(file.Original)).Select(file => file.Target), StringComparer.OrdinalIgnoreCase).SetEquals(OriginalTargets(ide)))
+                throw new InvalidDataException("The generated patch does not cover the installed workflow templates and designer components.");
             if (AssemblyName.GetAssemblyName(Path.Combine(output, "CoreWF.LegacyAdapters.dll")).FullName !=
                 AssemblyName.GetAssemblyName(Path.Combine(Program.Payload, "CoreWF.LegacyAdapters.dll")).FullName)
                 throw new InvalidDataException("Local API binding changed the compatibility library identity.");

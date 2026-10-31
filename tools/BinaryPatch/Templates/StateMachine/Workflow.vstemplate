@@ -4,11 +4,11 @@
     <Description>A XAML state-machine workflow for .NET Core and modern .NET. Opens in the patched Workflow Designer. Requires a CoreWF-compatible runtime package in the project.</Description>
     <Icon Package="{FAE04EC1-301F-11d3-BF4B-00C04F79EFBC}" ID="4565" />
     <ProjectType>CSharp</ProjectType>
-    <AppliesTo>CSharp</AppliesTo>
+    <AppliesTo>CSharp + CoreWFModernRuntime</AppliesTo>
     <TemplateID>CoreWF.CSharp.StateMachine</TemplateID>
     <DefaultName>StateMachine.xaml</DefaultName>
     <SortOrder>110</SortOrder>
-    <ShowByDefault>true</ShowByDefault>
+    <ShowByDefault>false</ShowByDefault>
     <NumberOfParentCategoriesToRollUp>2</NumberOfParentCategoriesToRollUp>
   </TemplateData>
   <TemplateContent>

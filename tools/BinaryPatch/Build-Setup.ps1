@@ -14,7 +14,7 @@ $sources = @{
     'THIRD-PARTY-NOTICES.md' = Join-Path $repository '.packages\mono.cecil\0.11.6\LICENSE.txt'
     'tools/BinaryPatch/LegacyPatchProfiles.json' = Join-Path $PSScriptRoot 'LegacyPatchProfiles.json'
 }
-foreach ($script in @('Build-StandardDesignerPatch.ps1','Build-LegacyAdapters.ps1','Build-DynamicActivities.ps1','Build-WorkflowTemplates.ps1','Install-StandardDesignerPatch.ps1','Install-LegacyAdapters.ps1','Install-DynamicActivities.ps1','Install-WorkflowTemplates.ps1','Prepare-LocalPatch.ps1','Build-CompatibleBridge.ps1','Patch-Support.ps1')) {
+foreach ($script in @('Build-StandardDesignerPatch.ps1','Build-LegacyAdapters.ps1','Build-DynamicActivities.ps1','Build-WorkflowTemplates.ps1','Build-WorkflowRuntimeFilter.ps1','Install-StandardDesignerPatch.ps1','Install-LegacyAdapters.ps1','Install-DynamicActivities.ps1','Install-WorkflowTemplates.ps1','Prepare-LocalPatch.ps1','Build-CompatibleBridge.ps1','Patch-Support.ps1')) {
     $sources['tools/BinaryPatch/' + $script] = Join-Path $PSScriptRoot $script
 }
 foreach ($template in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'Templates') -File -Recurse) {

@@ -67,7 +67,7 @@ namespace BuiltinDesigner.Setup
             var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (Entry file in plan.Files)
             {
-                string target = Contained(ide, file.Target);
+                string target = LocalPatch.TargetPath(ide, file.Target);
                 if (!targets.Add(target)) throw new InvalidDataException("Duplicate package target.");
                 if (!uninstall)
                 {
@@ -105,7 +105,7 @@ namespace BuiltinDesigner.Setup
             {
                 foreach (Entry file in plan.Files)
                 {
-                    string target = Contained(ide, file.Target);
+                    string target = LocalPatch.TargetPath(ide, file.Target);
                     snapshots.Add(new Snapshot { Path = target, Bytes = File.Exists(target) ? File.ReadAllBytes(target) : null });
                     if (!string.IsNullOrEmpty(file.Original))
                     {
@@ -137,6 +137,7 @@ namespace BuiltinDesigner.Setup
                     Directory.CreateDirectory(Path.GetDirectoryName(receipt));
                     File.WriteAllText(receipt, new JavaScriptSerializer().Serialize(plan));
                 }
+                RefreshTemplates(ide, log);
             }
             catch
             {
@@ -146,7 +147,27 @@ namespace BuiltinDesigner.Setup
                     else File.WriteAllBytes(snapshot.Path, snapshot.Bytes);
                 }
                 log("The operation failed. Every changed designer file was rolled back.");
+                try { RefreshTemplates(ide, log); }
+                catch (Exception error) { log("Template catalog recovery also needs a refresh: " + error.Message); }
                 throw;
+            }
+        }
+
+        private static void RefreshTemplates(string ide, Action<string> log)
+        {
+            // Isolated tests never start an IDE. Real installation and recovery
+            // both refresh the selected instance's registered item catalogs.
+            if (!File.Exists(Path.Combine(ide, "devenv.exe"))) return;
+            log("Refreshing Visual Studio's item template catalog...");
+            var start = new ProcessStartInfo(Path.Combine(ide, "devenv.com"), "/InstallVSTemplates")
+                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            using (Process process = Process.Start(start))
+            {
+                Task<string> output = process.StandardOutput.ReadToEndAsync();
+                Task<string> error = process.StandardError.ReadToEndAsync();
+                if (!process.WaitForExit(180000)) { process.Kill(); throw new TimeoutException("Visual Studio template catalog refresh timed out."); }
+                Task.WaitAll(output, error);
+                if (process.ExitCode != 0) throw new InvalidOperationException("Visual Studio template catalog refresh failed: " + process.ExitCode + " " + error.Result + output.Result);
             }
         }
     }

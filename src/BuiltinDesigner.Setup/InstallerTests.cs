@@ -20,7 +20,7 @@ namespace BuiltinDesigner.Setup
         {
             foreach (Entry file in plan.Files)
             {
-                string target = PatchEngine.Contained(ide, file.Target);
+                string target = LocalPatch.TargetPath(ide, file.Target);
                 if (string.IsNullOrEmpty(file.Original))
                 {
                     if (File.Exists(target)) throw new Exception("An owned file was left behind: " + file.Target);
@@ -39,7 +39,7 @@ namespace BuiltinDesigner.Setup
             LocalPatch.ValidateInstallation(ide, false);
             Plan legacy = LocalPatch.LoadReceipt(ide, true);
             var snapshots = new List<Snapshot>();
-            foreach (Entry file in legacy.Files) snapshots.Add(new Snapshot { Path = PatchEngine.Contained(ide, file.Target), Bytes = File.ReadAllBytes(PatchEngine.Contained(ide, file.Target)) });
+            foreach (Entry file in legacy.Files) snapshots.Add(new Snapshot { Path = LocalPatch.TargetPath(ide, file.Target), Bytes = File.ReadAllBytes(LocalPatch.TargetPath(ide, file.Target)) });
             PatchEngine.Apply(legacy, "unused", ide, true, log);
             Restored(legacy, ide);
             log("PASS: the actual earlier patch uninstalls without a receipt or embedded originals.");
@@ -47,10 +47,10 @@ namespace BuiltinDesigner.Setup
             string directory = Path.Combine(Program.WorkRoot, "migrated");
             Plan migrated = LocalPatch.Prepare(ide, directory, false, log);
             Reject<IOException>(delegate { PatchEngine.Apply(migrated, directory, ide, false, log, 7); });
-            foreach (Entry file in legacy.Files) PatchEngine.Verify(PatchEngine.Contained(ide, file.Target), file.Sha256);
+            foreach (Entry file in legacy.Files) PatchEngine.Verify(LocalPatch.TargetPath(ide, file.Target), file.Sha256);
             if (File.Exists(PatchEngine.Contained(ide, LocalPatch.Receipt))) throw new Exception("Failed migration left a receipt.");
             PatchEngine.Apply(migrated, directory, ide, false, log);
-            foreach (Entry file in migrated.Files) PatchEngine.Verify(PatchEngine.Contained(ide, file.Target), file.Sha256);
+            foreach (Entry file in migrated.Files) PatchEngine.Verify(LocalPatch.TargetPath(ide, file.Target), file.Sha256);
             PatchEngine.Apply(LocalPatch.LoadReceipt(ide, true), "unused", ide, true, log);
             Restored(migrated, ide);
             foreach (Entry file in legacy.Files.Where(file => !string.IsNullOrEmpty(file.Original))) PatchEngine.Verify(LocalPatch.BackupPath(ide, file), file.OriginalSha256);
@@ -118,7 +118,7 @@ namespace BuiltinDesigner.Setup
                     if (first.VisualStudioVersion == "18.9.12128.139") throw new Exception("The structural fixture must have a different identity from the former version pin.");
                     Restored(first, fixture);
                     PatchEngine.Apply(first, generated, fixture, false, log);
-                    foreach (Entry file in first.Files) PatchEngine.Verify(PatchEngine.Contained(fixture, file.Target), file.Sha256);
+                    foreach (Entry file in first.Files) PatchEngine.Verify(LocalPatch.TargetPath(fixture, file.Target), file.Sha256);
                     log("PASS: preparation leaves inputs untouched; local installation and receipt verified.");
 
                     string repairDirectory = Path.Combine(Program.WorkRoot, "generated-repair");
@@ -127,28 +127,59 @@ namespace BuiltinDesigner.Setup
                         repair.Files.Single(file => file.Target == "Microsoft.VisualStudio.Activities.dll").Sha256)
                         throw new Exception("Repair should test a newly generated patch identity.");
                     PatchEngine.Apply(repair, repairDirectory, fixture, false, log);
-                    foreach (Entry file in repair.Files) PatchEngine.Verify(PatchEngine.Contained(fixture, file.Target), file.Sha256);
+                    foreach (Entry file in repair.Files) PatchEngine.Verify(LocalPatch.TargetPath(fixture, file.Target), file.Sha256);
                     log("PASS: repair accepts only the prior recorded patch and freshly generated outputs.");
 
                     string receiptPath = PatchEngine.Contained(fixture, LocalPatch.Receipt);
                     string receiptHash = PatchEngine.Hash(receiptPath);
                     Reject<IOException>(delegate { PatchEngine.Apply(first, generated, fixture, false, log, 7); });
-                    foreach (Entry file in repair.Files) PatchEngine.Verify(PatchEngine.Contained(fixture, file.Target), file.Sha256);
+                    foreach (Entry file in repair.Files) PatchEngine.Verify(LocalPatch.TargetPath(fixture, file.Target), file.Sha256);
                     PatchEngine.Verify(receiptPath, receiptHash);
                     Reject<IOException>(delegate { PatchEngine.Apply(repair, repairDirectory, fixture, true, log, 7); });
-                    foreach (Entry file in repair.Files) PatchEngine.Verify(PatchEngine.Contained(fixture, file.Target), file.Sha256);
+                    foreach (Entry file in repair.Files) PatchEngine.Verify(LocalPatch.TargetPath(fixture, file.Target), file.Sha256);
                     PatchEngine.Verify(receiptPath, receiptHash);
                     log("PASS: failed repair and uninstall preserve the previous installation and its receipt.");
+                    foreach (bool uninstall in new[] { false, true })
+                    {
+                        Reject<IOException>(delegate { PatchEngine.Apply(repair, repairDirectory, fixture, uninstall, log, repair.Files.Length); });
+                        foreach (Entry file in repair.Files) PatchEngine.Verify(LocalPatch.TargetPath(fixture, file.Target), file.Sha256);
+                        PatchEngine.Verify(receiptPath, receiptHash);
+                    }
+                    log("PASS: failures after modifying template catalogs and MSBuild capabilities restore every metadata file and receipt.");
 
                     // Keep this locally generated DLL only in the ignored fixture for the callback probe.
                     string probe = Path.Combine(fixture, "test-generated");
                     Directory.CreateDirectory(probe);
                     File.Copy(Path.Combine(repairDirectory, "Microsoft.VisualStudio.Activities.dll"), Path.Combine(probe, "Microsoft.VisualStudio.Activities.dll"));
                     File.Copy(Path.Combine(repairDirectory, "CoreWF.LegacyAdapters.dll"), Path.Combine(probe, "CoreWF.LegacyAdapters.dll"));
+                    foreach (Entry file in repair.Files.Where(file => LocalPatch.IsTemplateOriginal(file.Target)))
+                    {
+                        string destination = PatchEngine.Contained(probe, file.Target);
+                        Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                        File.Copy(PatchEngine.Contained(repairDirectory, file.Payload), destination);
+                    }
                     Plan receipt = LocalPatch.LoadReceipt(fixture, true);
                     PatchEngine.Apply(receipt, Path.Combine(Program.WorkRoot, "no-payload-here"), fixture, true, log);
                     Restored(repair, fixture);
                     log("PASS: uninstall restores verified local backups without an embedded or generated Microsoft payload.");
+
+                    // Earlier receipt-based installers copied CoreWF templates but
+                    // did not patch catalogs or design-time capabilities.
+                    var old = new Plan { VisualStudioVersion = first.VisualStudioVersion,
+                        Files = first.Files.Where(file => !LocalPatch.IsTemplateOriginal(file.Target)).ToArray() };
+                    foreach (Entry file in old.Files)
+                    {
+                        string destination = LocalPatch.TargetPath(fixture, file.Target);
+                        Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                        File.Copy(PatchEngine.Contained(generated, file.Payload), destination, true);
+                    }
+                    File.WriteAllText(receiptPath, new JavaScriptSerializer().Serialize(old));
+                    string upgradeDirectory = Path.Combine(Program.WorkRoot, "generated-upgrade");
+                    Plan upgrade = LocalPatch.Prepare(fixture, upgradeDirectory, false, log);
+                    PatchEngine.Apply(upgrade, upgradeDirectory, fixture, false, log);
+                    PatchEngine.Apply(LocalPatch.LoadReceipt(fixture, true), "unused", fixture, true, log);
+                    Restored(upgrade, fixture);
+                    log("PASS: existing receipt-based installations upgrade to runtime-filtered templates and uninstall cleanly.");
 
                     Reject<IOException>(delegate { PatchEngine.Apply(first, generated, fixture, false, log, 5); });
                     Restored(first, fixture);
@@ -159,7 +190,7 @@ namespace BuiltinDesigner.Setup
                     Reject<InvalidOperationException>(delegate { PatchEngine.Preflight(first, generated, fixture, false); });
                     File.Delete(owned);
                     Entry original = first.Files.First(file => !string.IsNullOrEmpty(file.Original));
-                    string target = PatchEngine.Contained(fixture, original.Target);
+                    string target = LocalPatch.TargetPath(fixture, original.Target);
                     byte[] bytes = File.ReadAllBytes(target);
                     File.WriteAllText(target, "not a managed designer assembly");
                     Reject<BadImageFormatException>(delegate { LocalPatch.ValidateInstallation(fixture, false); });
