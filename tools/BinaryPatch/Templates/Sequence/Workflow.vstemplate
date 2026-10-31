@@ -1,12 +1,12 @@
 <VSTemplate Version="3.0.0" Type="Item" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005">
   <TemplateData>
-    <Name>Workflow (CoreWF)</Name>
-    <Description>A XAML sequence workflow for .NET Core and modern .NET. Opens in the patched Workflow Designer. Requires a CoreWF-compatible runtime package in the project.</Description>
+    <Name>Activity (CoreWF)</Name>
+    <Description>A XAML sequence workflow activity for .NET Core and modern .NET. Uses the standard Workflow Designer without the legacy Framework compiler or reference wizard. Requires a CoreWF-compatible runtime package to execute the workflow.</Description>
     <Icon Package="{FAE04EC1-301F-11d3-BF4B-00C04F79EFBC}" ID="4565" />
     <ProjectType>CSharp</ProjectType>
     <AppliesTo>CSharp</AppliesTo>
     <TemplateID>CoreWF.CSharp.Sequence</TemplateID>
-    <DefaultName>Workflow.xaml</DefaultName>
+    <DefaultName>Activity.xaml</DefaultName>
     <SortOrder>100</SortOrder>
     <ShowByDefault>true</ShowByDefault>
     <NumberOfParentCategoriesToRollUp>2</NumberOfParentCategoriesToRollUp>

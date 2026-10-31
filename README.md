@@ -56,6 +56,16 @@ Use **Browse** for an installation outside the list.
 After adding or changing a custom activity, build the project again to refresh
 its design-time metadata and Toolbox entry. The setup executable is unsigned.
 
+For new workflow files, choose **Activity (CoreWF)**, **Flowchart Workflow
+(CoreWF)**, or **State Machine Workflow (CoreWF)** in **Add New Item**. The
+original **Activity** template uses the .NET Framework reference wizard and
+XAML compiler, which cannot build modern .NET workflows.
+
+CoreWF workflow XAML is loaded by the application's workflow runtime. These
+templates use build action **None** and the standard designer; they do not
+generate an `Activity1` C# class during the build. Add a compatible workflow
+runtime package to your application when you want to execute the workflow.
+
 ## Repair and uninstall
 
 Run the installer again and select the same Visual Studio installation. Choose
@@ -167,6 +177,30 @@ The DevHub workaround is not applied by the installer. Its script provides
 of that workaround remains unconfirmed.
 
 ## Diagnostics
+
+### Legacy Activity template in a modern project
+
+Reference-wizard errors for `System.Activities` or `Microsoft.CSharp`, and
+`XC1000` / `XC1020` errors mentioning `System.Runtime` or `System.Object`, can
+occur when a modern project contains legacy `XamlAppDef` workflow items.
+
+Replace those items and their `None Remove` entries with the following settings
+for each affected workflow. Clear the file's **Custom Tool** property as well.
+
+```xml
+<ItemGroup>
+  <None Update="Activity1.xaml">
+    <SubType>Designer</SubType>
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
+```
+
+Do not retain `<Generator>MSBuild:Compile</Generator>` on these workflow files.
+The copy setting makes the XAML available beside the application for runtime
+loading. For new items, choose one of the **(CoreWF)** templates above.
+
+### Designer initialization
 
 If the designer reports that `.NETCoreApp` is unsupported, check that you
 patched the Visual Studio instance currently running. Installing the patch
