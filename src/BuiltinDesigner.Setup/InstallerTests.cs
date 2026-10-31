@@ -79,7 +79,38 @@ namespace BuiltinDesigner.Setup
                             window.Controls.OfType<Button>().Single(button => button.Text == "Install / Repair").Enabled)
                             throw new Exception("Consent must be unchecked and installation disabled by default.");
                     }
+                    var installations = new[]
+                    {
+                        new VisualStudioInstance { DisplayName = "Visual Studio 2026", IdePath = @"C:\Test\VS2026\Common7\IDE" },
+                        new VisualStudioInstance { DisplayName = "Visual Studio 2022", IdePath = @"C:\Test\VS2022\Common7\IDE" }
+                    };
+                    using (var window = new SetupWindow(installations))
+                    {
+                        var selector = window.Controls.OfType<ComboBox>().Single();
+                        var path = window.Controls.OfType<TextBox>().Single(control => control.Name == "IdePath");
+                        var consent = window.Controls.OfType<CheckBox>().Single();
+                        var install = window.Controls.OfType<Button>().Single(button => button.Text == "Install / Repair");
+                        var uninstall = window.Controls.OfType<Button>().Single(button => button.Text == "Uninstall");
+                        consent.Checked = true;
+                        if (selector.Items.Count != 2 || selector.SelectedIndex != -1 || path.Text.Length != 0 || install.Enabled || uninstall.Enabled)
+                            throw new Exception("Multiple Visual Studio installations require an explicit selection.");
+                        foreach (int index in new[] { 1, 0, 1 })
+                        {
+                            selector.SelectedIndex = index;
+                            if (path.Text != installations[index].IdePath || !install.Enabled || !uninstall.Enabled)
+                                throw new Exception("The selected Visual Studio did not become the operation target.");
+                        }
+                        path.Text = @"D:\CustomVisualStudio\Common7\IDE";
+                        if (selector.SelectedIndex != -1 || !install.Enabled)
+                            throw new Exception("A manually selected IDE must clear the previous installation label.");
+                        consent.Checked = false;
+                        if (install.Enabled || !uninstall.Enabled) throw new Exception("Selection changed the consent requirement.");
+                    }
+                    using (var window = new SetupWindow(new[] { installations[1] }))
+                        if (window.Controls.OfType<ComboBox>().Single().SelectedIndex != 0)
+                            throw new Exception("A single installation should be selected automatically.");
                     log("PASS: package inventory and explicit consent by default.");
+                    log("PASS: Visual Studio selection controls the exact target, requires a choice for multiple IDEs, and preserves manual browsing and consent.");
                     Legacy(fixture, log);
 
                     string generated = Path.Combine(Program.WorkRoot, "generated-first");

@@ -249,64 +249,73 @@ namespace BuiltinDesigner.Setup
 
     internal sealed class SetupWindow : Form
     {
-        private readonly TextBox path = new TextBox();
+        private readonly ComboBox instances = new ComboBox { Name = "VisualStudioInstallation", DropDownStyle = ComboBoxStyle.DropDownList };
+        private readonly TextBox path = new TextBox { Name = "IdePath" };
         private readonly TextBox details = new TextBox();
         private readonly Button install = new Button { Text = "Install / Repair" };
         private readonly Button remove = new Button { Text = "Uninstall" };
         private readonly Button browse = new Button { Text = "Browse…" };
         private readonly CheckBox consent = new CheckBox();
 
-        internal SetupWindow()
+        internal SetupWindow() : this(LocalPatch.FindInstalledIdes()) { }
+
+        internal SetupWindow(IEnumerable<VisualStudioInstance> installations)
         {
             Text = "CoreWF Workflow Designer Patch";
-            ClientSize = new Size(690, 516);
-            MinimumSize = new Size(706, 555);
+            ClientSize = new Size(760, 586);
+            MinimumSize = new Size(776, 625);
             StartPosition = FormStartPosition.CenterScreen;
             Font = new Font("Segoe UI", 10);
             var heading = new Label { Text = "Use the standard Workflow Designer with modern .NET", AutoSize = true, Location = new Point(22, 22), Font = new Font("Segoe UI", 13, FontStyle.Bold) };
             var description = new Label { Text = "Built-in designer • Standard Toolbox • Activity discovery after builds\r\nUses your installed designer · Close Visual Studio before installing.", AutoSize = true, Location = new Point(22, 62) };
-            var label = new Label { Text = "Visual Studio IDE folder", AutoSize = true, Location = new Point(22, 125) };
-            path.SetBounds(22, 152, 545, 28);
-            path.Text = FindIde();
-            browse.SetBounds(576, 151, 92, 30);
+            var instanceLabel = new Label { Text = "Visual Studio installation (choose one)", AutoSize = true, Location = new Point(22, 125) };
+            instances.SetBounds(22, 152, 716, 28);
+            instances.DropDownWidth = 716;
+            var label = new Label { Text = "Selected Visual Studio IDE folder", AutoSize = true, Location = new Point(22, 192) };
+            path.SetBounds(22, 219, 615, 28);
+            browse.SetBounds(646, 218, 92, 30);
             consent.Text = "I authorize patching my installed Visual Studio designer files and keeping local backups.";
-            consent.SetBounds(22, 194, 646, 48);
+            consent.SetBounds(22, 261, 716, 48);
             consent.Checked = false;
             install.Enabled = false;
-            consent.CheckedChanged += delegate { install.Enabled = consent.Checked; };
-            install.SetBounds(22, 256, 160, 36);
-            remove.SetBounds(193, 256, 125, 36);
-            details.SetBounds(22, 310, 646, 180);
+            consent.CheckedChanged += delegate { UpdateActions(); };
+            instances.SelectedIndexChanged += delegate
+            {
+                var selected = instances.SelectedItem as VisualStudioInstance;
+                if (selected != null) path.Text = selected.IdePath;
+            };
+            path.TextChanged += delegate
+            {
+                var selected = instances.SelectedItem as VisualStudioInstance;
+                if (selected != null && !string.Equals(path.Text, selected.IdePath, StringComparison.OrdinalIgnoreCase)) instances.SelectedIndex = -1;
+                UpdateActions();
+            };
+            install.SetBounds(22, 323, 160, 36);
+            remove.SetBounds(193, 323, 125, 36);
+            details.SetBounds(22, 377, 716, 180);
             details.Multiline = true; details.ReadOnly = true; details.ScrollBars = ScrollBars.Vertical;
-            details.Text = "No Microsoft DLLs are included in this installer.\r\nCompatibility is checked from the installed designer, without an exact build requirement.\r\nRecognized older patches can be upgraded or uninstalled directly.\r\nOriginal files are backed up locally. This setup executable is unsigned.";
-            Controls.AddRange(new Control[] { heading, description, label, path, browse, consent, install, remove, details });
+            details.Text = "Choose the Visual Studio installation to patch above, or use Browse.\r\nNo Microsoft DLLs are included in this installer.\r\nCompatibility is checked from the installed designer, without an exact build requirement.\r\nRecognized older patches can be upgraded or uninstalled directly.\r\nOriginal files are backed up locally. This setup executable is unsigned.";
+            Controls.AddRange(new Control[] { heading, description, instanceLabel, instances, label, path, browse, consent, install, remove, details });
+            instances.Items.AddRange(installations.Cast<object>().ToArray());
+            // With multiple IDEs installed, require a deliberate choice instead of patching the newest silently.
+            if (instances.Items.Count == 1) instances.SelectedIndex = 0;
+            UpdateActions();
             browse.Click += delegate { using (var dialog = new FolderBrowserDialog { Description = "Select Common7\\IDE", SelectedPath = path.Text }) if (dialog.ShowDialog(this) == DialogResult.OK) path.Text = dialog.SelectedPath; };
             install.Click += async delegate { await Run(false); };
             remove.Click += async delegate { await Run(true); };
         }
 
-        private static string FindIde()
+        private void UpdateActions()
         {
-            string configured = LocalPatch.FindInstalledIde();
-            if (configured != null) return configured;
-            foreach (string programFiles in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
-            {
-                string root = Path.Combine(programFiles, "Microsoft Visual Studio");
-                if (!Directory.Exists(root)) continue;
-                foreach (string version in Directory.GetDirectories(root).OrderByDescending(value => value))
-                    foreach (string edition in new[] { "Enterprise", "Professional", "Community" })
-                    {
-                        string ide = Path.Combine(version, edition, "Common7", "IDE");
-                        if (File.Exists(Path.Combine(ide, "devenv.exe"))) return ide;
-                    }
-            }
-            return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            bool selected = !string.IsNullOrWhiteSpace(path.Text);
+            install.Enabled = selected && consent.Checked;
+            remove.Enabled = selected;
         }
 
         private async Task Run(bool uninstall)
         {
             string result = Path.Combine(Path.GetTempPath(), "CoreWF-Setup-" + Guid.NewGuid().ToString("N") + ".log");
-            install.Enabled = remove.Enabled = browse.Enabled = path.Enabled = consent.Enabled = false;
+            install.Enabled = remove.Enabled = browse.Enabled = path.Enabled = consent.Enabled = instances.Enabled = false;
             try
             {
                 if (!uninstall) LocalPatch.RequireConsent(consent.Checked ? LocalPatch.Consent : null);
@@ -324,8 +333,8 @@ namespace BuiltinDesigner.Setup
             finally
             {
                 if (File.Exists(result)) File.Delete(result);
-                remove.Enabled = browse.Enabled = path.Enabled = consent.Enabled = true;
-                install.Enabled = consent.Checked;
+                browse.Enabled = path.Enabled = consent.Enabled = instances.Enabled = true;
+                UpdateActions();
             }
         }
 

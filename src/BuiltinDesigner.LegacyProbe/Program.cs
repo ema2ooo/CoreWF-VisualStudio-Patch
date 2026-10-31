@@ -19,6 +19,10 @@ internal static class Program
         AppDomain domain = null;
         try
         {
+            string nativeDirectory = System.IO.Path.Combine(Environment.GetEnvironmentVariable("COREWF_PROBE_IDE") ?? "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\Common7\\IDE", "AppLocalWPF");
+            foreach (string name in new[] { "vcruntime140_cor3.dll", "wpfgfx_cor3.dll", "PresentationNative_cor3.dll" })
+                if (System.IO.File.Exists(System.IO.Path.Combine(nativeDirectory, name)) && LoadLibraryEx(System.IO.Path.Combine(nativeDirectory, name), IntPtr.Zero, 8) == IntPtr.Zero)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to load Visual Studio WPF native dependency: " + name);
             if (args.Length == 2 && args[0] == "--partition-probe")
             {
                 string ide = Environment.GetEnvironmentVariable("COREWF_PROBE_IDE") ?? "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\Common7\\IDE";
@@ -27,10 +31,41 @@ internal static class Program
                 {
                     string name = new AssemblyName(request.Name).Name;
                     string path = System.IO.Path.Combine(msbuild, name + ".dll");
-                    return name.StartsWith("Microsoft.Build", StringComparison.Ordinal) && System.IO.File.Exists(path)
-                        ? Assembly.LoadFrom(path) : null;
+                    if (name.StartsWith("Microsoft.Build", StringComparison.Ordinal) && System.IO.File.Exists(path)) return Assembly.LoadFrom(path);
+                    if (name.StartsWith("Microsoft.VisualStudio.", StringComparison.OrdinalIgnoreCase) || name.StartsWith("EnvDTE", StringComparison.OrdinalIgnoreCase) || name == "stdole")
+                        foreach (string directory in new[] { "PublicAssemblies", "PrivateAssemblies", "", "Contracts" })
+                        {
+                            path = System.IO.Path.Combine(ide, directory, name + ".dll");
+                            if (System.IO.File.Exists(path)) return Assembly.LoadFrom(path);
+                        }
+                    return null;
                 };
                 var patched = Assembly.LoadFile(System.IO.Path.GetFullPath(args[1]));
+                var helper = patched.GetType("Microsoft.VisualStudio.Activities.Helper", true);
+                var frameworkCallback = helper.GetMethod("GetTargetFramework", BindingFlags.NonPublic | BindingFlags.Static);
+                var paneType = patched.GetType("Microsoft.VisualStudio.Activities.EditorPane", true);
+                var pane = System.Runtime.Serialization.FormatterServices.GetUninitializedObject(paneType);
+                var paneCallback = paneType.GetMethod("GetTargetFramework", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                foreach (string moniker in new[] { ".NETCoreApp,Version=v8.0", ".NETCoreApp,Version=v10.0", ".NETStandard,Version=v2.0", ".NETFramework,Version=v4.7.2" })
+                {
+                    string expected = moniker.StartsWith(".NETFramework,") ? moniker : ".NETFramework,Version=v4.8";
+                    var resolver = new ProbeResolver(moniker);
+                    object[] frameworkArguments = { resolver, null, null };
+                    if ((int)frameworkCallback.Invoke(null, frameworkArguments) != 0 || (string)frameworkArguments[2] != expected)
+                        throw new InvalidOperationException("The patched framework helper did not normalize " + moniker);
+                    paneType.GetField("dtar", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(pane, resolver);
+                    object[] paneArguments = { null };
+                    if ((int)paneCallback.Invoke(pane, paneArguments) != 0 || (string)paneArguments[0] != expected)
+                        throw new InvalidOperationException("The patched editor callback did not normalize " + moniker);
+                    var configuration = new System.Activities.Presentation.WorkflowDesigner().Context.Services
+                        .GetService<System.Activities.Presentation.DesignerConfigurationService>();
+                    configuration.TargetFrameworkName = new System.Runtime.Versioning.FrameworkName((string)paneArguments[0]);
+                }
+                paneType.GetField("dtar", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(pane, new ProbeResolver(null, unchecked((int)0x80004005)));
+                object[] failedArguments = { "must be cleared" };
+                if ((int)paneCallback.Invoke(pane, failedArguments) != unchecked((int)0x80004005) || failedArguments[0] != null)
+                    throw new InvalidOperationException("The framework callback changed the failed lookup result.");
+                Console.WriteLine("PASS: actual patched framework callbacks accept .NET 8/10 and .NET Standard in the native designer; Framework targets and HRESULTs are preserved.");
                 var method = patched.GetType("Microsoft.VisualStudio.Activities.Helper", true)
                     .GetMethod("TryGetPartitionedBuildAssemblyPath", BindingFlags.NonPublic | BindingFlags.Static);
                 foreach (string moniker in new[] { ".NETCoreApp,Version=v10.0", ".NETStandard,Version=v2.0" })
@@ -72,10 +107,6 @@ internal static class Program
                 return 0;
             }
             Console.WriteLine("Process bitness: " + IntPtr.Size * 8);
-            string nativeDirectory = System.IO.Path.Combine(Environment.GetEnvironmentVariable("COREWF_PROBE_IDE") ?? "C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\Common7\\IDE", "AppLocalWPF");
-            foreach (string name in new[] { "vcruntime140_cor3.dll", "wpfgfx_cor3.dll", "PresentationNative_cor3.dll" })
-                if (System.IO.File.Exists(System.IO.Path.Combine(nativeDirectory, name)) && LoadLibraryEx(System.IO.Path.Combine(nativeDirectory, name), IntPtr.Zero, 8) == IntPtr.Zero)
-                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to load Visual Studio WPF native dependency: " + name);
             var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             Console.WriteLine("CLR: " + Environment.Version);
             Console.WriteLine("WPF: " + typeof(FrameworkElement).Assembly.FullName);
@@ -219,8 +250,9 @@ internal static class Program
 internal sealed class ProbeResolver : Microsoft.VisualStudio.Shell.Interop.IVsDesignTimeAssemblyResolution
 {
     private readonly string moniker;
-    public ProbeResolver(string moniker) { this.moniker = moniker; }
-    public int GetTargetFramework(out string framework) { framework = moniker; return 0; }
+    private readonly int result;
+    public ProbeResolver(string moniker, int result = 0) { this.moniker = moniker; this.result = result; }
+    public int GetTargetFramework(out string framework) { framework = moniker; return result; }
     public int ResolveAssemblyPathInTargetFx(string[] specs, uint count, Microsoft.VisualStudio.Shell.Interop.VsResolvedAssemblyPath[] paths, out uint resolved)
     { resolved = 0; throw new InvalidOperationException("A modern CLR reference resolver must not be used by the CLR4 designer."); }
 }

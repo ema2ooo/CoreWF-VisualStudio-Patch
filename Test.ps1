@@ -12,9 +12,20 @@ $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('CoreWF-LocalPatch-Test-' +
 $fixture = Join-Path $fixtureRoot 'Common7\IDE'
 New-Item -ItemType Directory -Path $fixture -Force | Out-Null
 Set-Content -LiteralPath (Join-Path $fixture '.corewf-test-fixture') -Value 'isolated-local-patch-test'
+$receiptPath = Join-Path $VisualStudioIdePath 'CoreWF.BuiltinPatchBackup\local-install-plan.json'
+$installedPlan = if (Test-Path -LiteralPath $receiptPath) { Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json } else { $null }
 foreach ($relative in @('Microsoft.VisualStudio.Activities.dll','HostSideAdapters\Microsoft.VisualStudio.Activities.HostAdapter.dll','AddinSideAdapters\Microsoft.VisualStudio.Activities.AddinAdapter.dll','Addins\WorkflowDesigner\Microsoft.VisualStudio.Activities.Addin.dll')) {
-    $source = Join-Path $VisualStudioIdePath ('CoreWF.BuiltinPatchBackup\' + $relative)
-    if (-not (Test-Path -LiteralPath $source)) { $source = Join-Path $VisualStudioIdePath $relative }
+    if ($installedPlan) {
+        $entry = @($installedPlan.Files | Where-Object { $_.Target.Replace('/','\') -eq $relative -and $_.Original })
+        if ($entry.Count -ne 1) { throw ('Original component is missing from the installation record: ' + $relative) }
+        $source = [IO.Path]::GetFullPath((Join-Path $VisualStudioIdePath $entry[0].Backup))
+        $prefix = [IO.Path]::GetFullPath($VisualStudioIdePath).TrimEnd('\') + '\'
+        if (-not $source.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or
+            (Get-FileHash -LiteralPath $source).Hash -ne $entry[0].OriginalSha256) { throw ('Invalid recorded original backup: ' + $relative) }
+    } else {
+        $source = Join-Path $VisualStudioIdePath ('CoreWF.BuiltinPatchBackup\' + $relative)
+        if (-not (Test-Path -LiteralPath $source)) { $source = Join-Path $VisualStudioIdePath $relative }
+    }
     $target = Join-Path $fixture $relative
     New-Item -ItemType Directory -Path ([IO.Path]::GetDirectoryName($target)) -Force | Out-Null
     Copy-Item -LiteralPath $source -Destination $target

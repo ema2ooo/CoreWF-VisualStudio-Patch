@@ -32,6 +32,13 @@ namespace BuiltinDesigner.Setup
         public Plan[] Plans { get; set; }
     }
 
+    internal sealed class VisualStudioInstance
+    {
+        public string DisplayName { get; set; }
+        public string IdePath { get; set; }
+        public override string ToString() { return DisplayName; }
+    }
+
     internal static class LocalPatch
     {
         internal const string Receipt = "CoreWF.BuiltinPatchBackup/local-install-plan.json";
@@ -201,24 +208,51 @@ namespace BuiltinDesigner.Setup
             }
         }
 
-        internal static string FindInstalledIde()
+        internal static VisualStudioInstance[] FindInstalledIdes()
         {
-            string vswhere = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
-            if (!File.Exists(vswhere)) return null;
-            var start = new ProcessStartInfo(vswhere, "-products * -prerelease -sort -property installationPath")
-                { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
-            using (Process process = Process.Start(start))
+            var instances = new List<VisualStudioInstance>();
+            Action<string, string> add = delegate(string root, string name)
             {
-                string roots = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                if (process.ExitCode != 0) return null;
-                foreach (string root in roots.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                string ide = Path.GetFullPath(Path.Combine(root, "Common7", "IDE"));
+                if (File.Exists(Path.Combine(ide, "devenv.exe")) && File.Exists(Path.Combine(ide, "Microsoft.VisualStudio.Activities.dll")) &&
+                    !instances.Any(item => string.Equals(item.IdePath, ide, StringComparison.OrdinalIgnoreCase)))
+                    instances.Add(new VisualStudioInstance { DisplayName = name, IdePath = ide });
+            };
+            string vswhere = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft Visual Studio", "Installer", "vswhere.exe");
+            if (File.Exists(vswhere))
+            {
+                try
                 {
-                    string ide = Path.Combine(root.Trim(), "Common7", "IDE");
-                    if (File.Exists(Path.Combine(ide, "devenv.exe")) && File.Exists(Path.Combine(ide, "Microsoft.VisualStudio.Activities.dll"))) return ide;
+                    var start = new ProcessStartInfo(vswhere, "-products * -prerelease -sort -format json -utf8")
+                        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, StandardOutputEncoding = System.Text.Encoding.UTF8 };
+                    using (Process process = Process.Start(start))
+                    {
+                        string json = process.StandardOutput.ReadToEnd();
+                        process.WaitForExit();
+                        if (process.ExitCode == 0)
+                            foreach (var item in new JavaScriptSerializer().Deserialize<Dictionary<string, object>[]>(json))
+                            {
+                                object root, name, version;
+                                if (!item.TryGetValue("installationPath", out root) || !(root is string)) continue;
+                                item.TryGetValue("displayName", out name);
+                                item.TryGetValue("installationVersion", out version);
+                                add((string)root, (name as string ?? "Visual Studio") + (version is string ? " (" + version + ")" : ""));
+                            }
+                    }
                 }
-                return null;
+                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { }
+                catch (ArgumentException) { }
             }
+            foreach (string programFiles in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
+            {
+                string root = Path.Combine(programFiles, "Microsoft Visual Studio");
+                if (!Directory.Exists(root)) continue;
+                foreach (string version in Directory.GetDirectories(root).OrderByDescending(value => value))
+                    foreach (string edition in new[] { "Enterprise", "Professional", "Community" })
+                        add(Path.Combine(version, edition), "Visual Studio " + Path.GetFileName(version) + " " + edition);
+            }
+            return instances.ToArray();
         }
 
         internal static Plan Prepare(string ide, string output, bool requireVisualStudio, Action<string> log)
