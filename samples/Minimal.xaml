@@ -1,0 +1,7 @@
+<Activity xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+          x:Class="PatchSample.Minimal">
+  <Sequence DisplayName="Patch smoke test">
+    <WriteLine Text="Hello from Workflow Foundation" />
+  </Sequence>
+</Activity>

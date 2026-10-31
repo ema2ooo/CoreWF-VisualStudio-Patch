@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <VisualStudioInstallRoot Condition="'$(VisualStudioInstallRoot)' == ''">C:\Program Files\Microsoft Visual Studio\18\Enterprise</VisualStudioInstallRoot>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CoreWF.LegacyAdapters\CoreWF.LegacyAdapters.csproj" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.Windows.Presentation" />
+    <Reference Include="System.AddIn" />
+    <Reference Include="System.AddIn.Contract" />
+    <Reference Include="System.Activities" />
+    <Reference Include="System.Activities.Presentation" />
+    <Reference Include="System.Activities.Core.Presentation" />
+    <Reference Include="Microsoft.VisualStudio.Interop"><HintPath>$(VisualStudioInstallRoot)\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+</Project>

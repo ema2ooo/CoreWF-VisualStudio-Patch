@@ -1,0 +1,19 @@
+<Activity x:Class="$rootnamespace$.$safeitemname$"
+ xmlns="http://schemas.microsoft.com/netfx/2009/xaml/activities"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <StateMachine DisplayName="$safeitemname$">
+    <StateMachine.InitialState>
+      <x:Reference>InitialState</x:Reference>
+    </StateMachine.InitialState>
+    <State x:Name="InitialState" DisplayName="Initial">
+      <State.Transitions>
+        <Transition DisplayName="Complete">
+          <Transition.To>
+            <x:Reference>FinalState</x:Reference>
+          </Transition.To>
+        </Transition>
+      </State.Transitions>
+    </State>
+    <State x:Name="FinalState" DisplayName="Completed" IsFinal="True" />
+  </StateMachine>
+</Activity>

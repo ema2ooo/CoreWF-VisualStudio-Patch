@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>..\..\tools\BinaryPatch\Bridge.snk</AssemblyOriginatorKeyFile>
+    <VisualStudioInstallRoot Condition="'$(VisualStudioInstallRoot)' == ''">C:\Program Files\Microsoft Visual Studio\18\Enterprise</VisualStudioInstallRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="StandardToolbox.xml" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.AddIn" />
+    <Reference Include="System.AddIn.Contract" />
+    <Reference Include="System.Activities" />
+    <Reference Include="System.Activities.Presentation" />
+    <Reference Include="Mono.Cecil"><HintPath>..\..\tools\BinaryPatch\Mono.Cecil.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="System.Core" />
+    <Reference Include="Microsoft.VisualStudio.Interop"><HintPath>$(VisualStudioInstallRoot)\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.15.0"><HintPath>$(VisualStudioInstallRoot)\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Shell.15.0.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Framework"><HintPath>$(VisualStudioInstallRoot)\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Shell.Framework.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

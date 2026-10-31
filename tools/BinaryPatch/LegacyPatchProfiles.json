@@ -1,0 +1,100 @@
+{
+  "Plans": [
+    {
+      "VisualStudioVersion": "18.9.12128.139",
+      "Files": [
+        {
+          "Target": "CoreWF.LegacyAdapters.dll",
+          "Payload": "CoreWF.LegacyAdapters.dll",
+          "Sha256": "114D6FE0DCE758A53C93E199E82336E54F8A8422D5AFED056E827E253904B89A",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "Mono.Cecil.dll",
+          "Payload": "Mono.Cecil.dll",
+          "Sha256": "831DCA77470D85CB6FFBEA3072DAA7A3DF5B7C9FCFD9C3F43674A9BE99D4BFCF",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "HostSideAdapters/Microsoft.VisualStudio.Activities.HostAdapter.dll",
+          "Payload": "LegacyAdapters/HostSideAdapters/Microsoft.VisualStudio.Activities.HostAdapter.dll",
+          "Sha256": "055EF96D7575085F6D5AF5C756D08D75F67600FADA43A2CE0FC4638CA55E4FC9",
+          "Original": "LegacyAdapters/HostSideAdapters/Microsoft.VisualStudio.Activities.HostAdapter.dll.original",
+          "OriginalSha256": "96A524AAA9692D569A0F18FA27B54C8F2901B228316D06337B370C72584D9FF1"
+        },
+        {
+          "Target": "AddinSideAdapters/Microsoft.VisualStudio.Activities.AddinAdapter.dll",
+          "Payload": "LegacyAdapters/AddinSideAdapters/Microsoft.VisualStudio.Activities.AddinAdapter.dll",
+          "Sha256": "6182BB521DE0E30385635DD824F09895B9BE8827BC72FD36C8CEA668DC4F2128",
+          "Original": "LegacyAdapters/AddinSideAdapters/Microsoft.VisualStudio.Activities.AddinAdapter.dll.original",
+          "OriginalSha256": "3E5F575E48636D37E89C24E48A4775A9A63C2D6CCB4D29F0142D5397635EA2AD"
+        },
+        {
+          "Target": "Addins/WorkflowDesigner/Microsoft.VisualStudio.Activities.Addin.dll",
+          "Payload": "DynamicActivities/Addins/WorkflowDesigner/Microsoft.VisualStudio.Activities.Addin.dll",
+          "Sha256": "D99980339693D509FEAB06F0F7C40A83869A1724A6E9DAEF20E1682B989AEDDB",
+          "Original": "DynamicActivities/Addins/WorkflowDesigner/Microsoft.VisualStudio.Activities.Addin.dll.original",
+          "OriginalSha256": "99630D1C1DB0DA48B4C6C70CD32B1952092B79E51006BE36D8C5BCAF3DE26C79"
+        },
+        {
+          "Target": "Microsoft.VisualStudio.Activities.dll",
+          "Payload": "Microsoft.VisualStudio.Activities.dll",
+          "Sha256": "CA631656750E37D87F0F73569A1E5275865844E534C129C64EFC45C974C2877C",
+          "Original": "Microsoft.VisualStudio.Activities.original.dll",
+          "OriginalSha256": "43FE69728DB8D22E0FA3A1F0E642B56649DE8017AC1473C91F1726BEEB188008"
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFFlowchart/Workflow.vstemplate",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFFlowchart/Workflow.vstemplate",
+          "Sha256": "F9B735EA238A7F0AE516E56313D87B0F75A630BA7E75CC2EBF124E066E527844",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFFlowchart/Workflow.xaml",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFFlowchart/Workflow.xaml",
+          "Sha256": "B17CEE64995CAFC008B14B89B4EE470A377F3C857EF503A8ADB9B40FA29BAB16",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFSequence/Workflow.vstemplate",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFSequence/Workflow.vstemplate",
+          "Sha256": "B09C752D6F0A3BB9742458318A024C86E2CDCCC19AA89476EA17B07A20688FAE",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFSequence/Workflow.xaml",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFSequence/Workflow.xaml",
+          "Sha256": "B9FF2E249936C274E16645AF135D965DFED1936CC05C0FD790EC81D72546A657",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFStateMachine/Workflow.vstemplate",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFStateMachine/Workflow.vstemplate",
+          "Sha256": "BF0C6D5C1727D6CF8B694322E665C1CE139162C186B185061F3E438BE6AE9303",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CSharp/Workflow/1033/CoreWFStateMachine/Workflow.xaml",
+          "Payload": "NewItemTemplates/CSharp/Workflow/1033/CoreWFStateMachine/Workflow.xaml",
+          "Sha256": "CB7A430620229CBE3E2AD1BC1517E45C9C00030E4B1EF3973CED63142A61D320",
+          "Original": "",
+          "OriginalSha256": ""
+        },
+        {
+          "Target": "ItemTemplates/CoreWF.BuiltinDesigner.Item.vstman",
+          "Payload": "NewItemTemplates/CoreWF.BuiltinDesigner.Item.vstman",
+          "Sha256": "93C1B668D14BAE503F0D317F149EDC50D215FD2A8E8985EFB49F7A3A07D6585C",
+          "Original": "",
+          "OriginalSha256": ""
+        }
+      ]
+    }
+  ]
+}
